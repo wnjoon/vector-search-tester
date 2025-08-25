@@ -14,7 +14,7 @@ func TestSentenceBertEmbedder(t *testing.T) {
 	client := NewSentenceBertEmbedder(URL)
 	t.Run("Embed - ShortText", func(t *testing.T) {
 		req := model.EmbeddingRequest{
-			Language: "eng",
+			Language: "en",
 			Text:     "today's weather is wonderful",
 		}
 		resp, err := client.Embed(context.Background(), req)
@@ -24,7 +24,7 @@ func TestSentenceBertEmbedder(t *testing.T) {
 
 	t.Run("Embed - LongText - Eng", func(t *testing.T) {
 		req := model.EmbeddingRequest{
-			Language: "eng",
+			Language: "en",
 			Text:     LongTextGopherConEng,
 		}
 		resp, err := client.Embed(context.Background(), req)

@@ -10,7 +10,7 @@ print("Loading Sentence-BERT model...")
 # - 'all-MiniLM-L6-v2': English model
 
 # model = SentenceTransformer('jhgan/ko-sroberta-multask') 
-eng_model = SentenceTransformer('all-MiniLM-L6-v2')
+en_model = SentenceTransformer('all-MiniLM-L6-v2')
 ko_model = SentenceTransformer('jhgan/ko-sroberta-multitask')
 print("Model loaded successfully.")
 
@@ -18,8 +18,8 @@ print("Model loaded successfully.")
 app = Flask(__name__)
 
 # 4. Create POST endpoint to handle '/embed' path
-@app.route('/embed/eng', methods=['POST'])
-def embed_eng():
+@app.route('/embed/en', methods=['POST'])
+def embed_en():
     # 4.1. Extract JSON data from request body
     data = request.get_json()
     if not data or 'text' not in data:
@@ -28,7 +28,7 @@ def embed_eng():
     text_to_embed = data['text']
     
     # 4.2. Convert text to embedding vector
-    embedding = eng_model.encode(text_to_embed)
+    embedding = en_model.encode(text_to_embed)
     
     # 4.3. Convert numpy array to list for JSON response
     response_data = {

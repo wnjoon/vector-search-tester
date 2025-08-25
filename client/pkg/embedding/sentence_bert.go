@@ -27,7 +27,7 @@ func (s *sentenceBertEmbedder) Embed(ctx context.Context, req model.EmbeddingReq
 		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
-	if req.Language != "eng" && req.Language != "ko" {
+	if req.Language != "en" && req.Language != "ko" {
 		return nil, fmt.Errorf("invalid language: %s", req.Language)
 	}
 
