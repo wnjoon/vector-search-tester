@@ -10,15 +10,16 @@ print("Loading Sentence-BERT model...")
 # - 'all-MiniLM-L6-v2': English model
 
 # model = SentenceTransformer('jhgan/ko-sroberta-multask') 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+eng_model = SentenceTransformer('all-MiniLM-L6-v2')
+ko_model = SentenceTransformer('jhgan/ko-sroberta-multitask')
 print("Model loaded successfully.")
 
 # 3. Create Flask app
 app = Flask(__name__)
 
 # 4. Create POST endpoint to handle '/embed' path
-@app.route('/embed', methods=['POST'])
-def embed():
+@app.route('/embed/eng', methods=['POST'])
+def embed_eng():
     # 4.1. Extract JSON data from request body
     data = request.get_json()
     if not data or 'text' not in data:
@@ -27,7 +28,27 @@ def embed():
     text_to_embed = data['text']
     
     # 4.2. Convert text to embedding vector
-    embedding = model.encode(text_to_embed)
+    embedding = eng_model.encode(text_to_embed)
+    
+    # 4.3. Convert numpy array to list for JSON response
+    response_data = {
+        "text": text_to_embed,
+        "embedding": embedding.tolist()
+    }
+    
+    return jsonify(response_data)
+
+@app.route('/embed/ko', methods=['POST'])
+def embed_ko():
+    # 4.1. Extract JSON data from request body
+    data = request.get_json()
+    if not data or 'text' not in data:
+        return jsonify({"error": "text field is required"}), 400
+
+    text_to_embed = data['text']
+    
+    # 4.2. Convert text to embedding vector
+    embedding = ko_model.encode(text_to_embed)
     
     # 4.3. Convert numpy array to list for JSON response
     response_data = {

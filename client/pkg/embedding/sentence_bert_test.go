@@ -12,9 +12,30 @@ const URL string = "http://localhost:6600"
 
 func TestSentenceBertEmbedder(t *testing.T) {
 	client := NewSentenceBertEmbedder(URL)
-	t.Run("Embed", func(t *testing.T) {
+	t.Run("Embed - ShortText", func(t *testing.T) {
 		req := model.EmbeddingRequest{
-			Text: "today's weather is wonderful",
+			Language: "eng",
+			Text:     "today's weather is wonderful",
+		}
+		resp, err := client.Embed(context.Background(), req)
+		assert.NoError(t, err)
+		t.Logf("Vector Dimension: %d\n", len(resp.Embedding))
+	})
+
+	t.Run("Embed - LongText - Eng", func(t *testing.T) {
+		req := model.EmbeddingRequest{
+			Language: "eng",
+			Text:     LongTextGopherConEng,
+		}
+		resp, err := client.Embed(context.Background(), req)
+		assert.NoError(t, err)
+		t.Logf("Vector Dimension: %d\n", len(resp.Embedding))
+	})
+
+	t.Run("Embed - LongText - Ko", func(t *testing.T) {
+		req := model.EmbeddingRequest{
+			Language: "ko",
+			Text:     LongTextGopherConKor,
 		}
 		resp, err := client.Embed(context.Background(), req)
 		assert.NoError(t, err)

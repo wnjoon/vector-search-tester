@@ -2,7 +2,8 @@ package model
 
 // EmbeddingRequest is a struct for embedding request
 type EmbeddingRequest struct {
-	Text string `json:"text"`
+	Text     string `json:"text"`
+	Language string `json:"language"`
 }
 
 // EmbeddingResponse is a struct for embedding response

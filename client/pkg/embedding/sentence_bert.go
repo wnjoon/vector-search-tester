@@ -27,9 +27,14 @@ func (s *sentenceBertEmbedder) Embed(ctx context.Context, req model.EmbeddingReq
 		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
-	// 3. Python API 서버에 POST 요청 보내기
+	if req.Language != "eng" && req.Language != "ko" {
+		return nil, fmt.Errorf("invalid language: %s", req.Language)
+	}
+
+	url := s.url + "/embed/" + req.Language
+
 	resp, err := http.Post(
-		s.url+"/embed",
+		url,
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)

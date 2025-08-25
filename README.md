@@ -46,6 +46,8 @@ Only you need to do is run sentence-bert server using `python3 server/embed_serv
 
 Testcode is written in `client/pkg/embedding/sentence_bert_test.go`
 
+> Sentence-Bert creates 384 dimensions vector for English text and 768 dimensions vector for Korean text.
+
 ### Gemini
 
 To embed text using gemini, you need to set up environment variable in `.env` file.
@@ -53,3 +55,5 @@ To embed text using gemini, you need to set up environment variable in `.env` fi
 `.env` file should be located in root directory of go project (`client` directory). You should add `GEMINI_API_KEY` to `.env` file and set it to your gemini api key.
 
 Testcode is written in `client/pkg/embedding/gemini_test.go`
+
+> Gemini creates 3072 dimensions vector for both English text and Korean text since it is designed to represent 3048 dimensions vector for any language.

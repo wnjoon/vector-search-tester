@@ -19,20 +19,42 @@ func TestGeminiEmbedder(t *testing.T) {
 			APIKey: LoadAPIKey(),
 		},
 	)
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
+	assert.NoError(t, err)
 
 	geminiEmbedder := NewGeminiEmbedder(client)
-	t.Run("Embed", func(t *testing.T) {
-		req := model.EmbeddingRequest{
-			Text: "today's weather is wonderful",
-		}
-		resp, err := geminiEmbedder.Embed(ctx, req)
-		assert.NoError(t, err)
-		t.Logf("Vector Dimension: %d\n", len(resp.Embedding))
+
+	t.Run("Embed - ShortText", func(t *testing.T) {
+		t.Run("today's weather is wonderful", func(t *testing.T) {
+			req := model.EmbeddingRequest{
+				Text: "today's weather is wonderful",
+			}
+			resp, err := geminiEmbedder.Embed(ctx, req)
+			assert.NoError(t, err)
+			t.Logf("Vector Dimension: %d\n", len(resp.Embedding))
+		})
 	})
 
+	t.Run("Embed - LongText - Eng", func(t *testing.T) {
+		t.Run("GopherCon", func(t *testing.T) {
+			req := model.EmbeddingRequest{
+				Text: LongTextGopherConEng,
+			}
+			resp, err := geminiEmbedder.Embed(ctx, req)
+			assert.NoError(t, err)
+			t.Logf("Vector Dimension: %d\n", len(resp.Embedding))
+		})
+	})
+
+	t.Run("Embed - LongText - Ko", func(t *testing.T) {
+		t.Run("GopherCon", func(t *testing.T) {
+			req := model.EmbeddingRequest{
+				Text: LongTextGopherConKor,
+			}
+			resp, err := geminiEmbedder.Embed(ctx, req)
+			assert.NoError(t, err)
+			t.Logf("Vector Dimension: %d\n", len(resp.Embedding))
+		})
+	})
 }
 
 func LoadAPIKey() string {
