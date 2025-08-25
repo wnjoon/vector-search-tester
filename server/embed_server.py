@@ -2,30 +2,34 @@ from flask import Flask, request, jsonify
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
-# 1. 모델 로드 (서버 시작 시 한 번만 실행되어 메모리에 상주합니다)
+# 1. Load model: model will be loaded only once and will be stored in memory
 print("Loading Sentence-BERT model...")
-# 한국어 모델 예시 (원하는 모델로 변경 가능)
+
+# 2. Choice model
+# - 'jhgan/ko-sroberta-multask': Korean model
+# - 'all-MiniLM-L6-v2': English model
+
 # model = SentenceTransformer('jhgan/ko-sroberta-multask') 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 print("Model loaded successfully.")
 
-# 2. Flask 앱 생성
+# 3. Create Flask app
 app = Flask(__name__)
 
-# 3. '/embed' 경로로 POST 요청을 처리할 API 엔드포인트 생성
+# 4. Create POST endpoint to handle '/embed' path
 @app.route('/embed', methods=['POST'])
 def embed():
-    # 요청 본문에서 JSON 데이터 추출
+    # 4.1. Extract JSON data from request body
     data = request.get_json()
     if not data or 'text' not in data:
         return jsonify({"error": "text field is required"}), 400
 
     text_to_embed = data['text']
     
-    # 텍스트를 임베딩 벡터로 변환
+    # 4.2. Convert text to embedding vector
     embedding = model.encode(text_to_embed)
     
-    # JSON으로 반환하기 위해 numpy array를 list로 변환
+    # 4.3. Convert numpy array to list for JSON response
     response_data = {
         "text": text_to_embed,
         "embedding": embedding.tolist()
@@ -33,7 +37,7 @@ def embed():
     
     return jsonify(response_data)
 
-# 4. 서버 실행
+# 5. Run server
 if __name__ == '__main__':
-    # 외부에서 접근 가능하도록 0.0.0.0으로 설정
+    # 5.1. Open port 6600 (modifiable)
     app.run(host='0.0.0.0', port=6600)
