@@ -25,6 +25,10 @@ func New(serverUrl, apiKey string, embedder embedding.Embedder) *Client {
 	}
 }
 
+func (c *Client) SetEmbedder(embedder embedding.Embedder) {
+	c.embedder = embedder
+}
+
 func (c *Client) CreateCollection(ctx context.Context, schema *tsapi.CollectionSchema) error {
 	if schema == nil {
 		return fmt.Errorf("collection schema is nil")
@@ -40,6 +44,14 @@ func (c *Client) CreateCollection(ctx context.Context, schema *tsapi.CollectionS
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create collection %s: %w", schema.Name, err)
+	}
+	return nil
+}
+
+func (c *Client) DeleteCollection(ctx context.Context, collName string) error {
+	_, err := c.client.Collection(collName).Delete(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete collection %s: %w", collName, err)
 	}
 	return nil
 }

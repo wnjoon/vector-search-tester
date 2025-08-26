@@ -2,20 +2,72 @@ package typesense
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
+	"github.com/typesense/typesense-go/typesense"
 	tsapi "github.com/typesense/typesense-go/typesense/api"
+	"github.com/typesense/typesense-go/typesense/api/pointer"
 	"github.com/wnjoon/vector-search-tester/pkg/embedding"
 	"github.com/wnjoon/vector-search-tester/pkg/model"
+	"google.golang.org/genai"
 )
+
+const typesenseApiKey string = "xyz"
+const typesenseUrl string = "http://localhost:8108"
+const sentenceBertEmbedderUrl string = "http://localhost:6600"
+
+const (
+	collCountriesDescriptionGeminiModelsEmbedding001 string = "countries_description_gemini_models_embedding_001"
+	collCountriesDescriptionGeminiGeminiEmbedding001 string = "countries_description_gemini_gemini_embedding_001"
+	collCountriesDescriptionSentenceBert             string = "countries_description_sentence_bert"
+	collDeveloperConferenceGeminiModelsEmbedding001  string = "developer_conferences_gemini_models_embedding_001"
+	collDeveloperConferenceGeminiGeminiEmbedding001  string = "developer_conferences_gemini_gemini_embedding_001"
+	collDeveloperConferenceSentenceBert              string = "developer_conferences_sentence_bert"
+)
+
+// embedding model for gemini
+type embeddingModel struct {
+	Model  string `json:"model"`
+	NumDim int    `json:"num_dim"`
+}
+
+var embeddingModelMap = map[string]embeddingModel{
+	"models/embedding-001": {
+		Model:  "models/embedding-001",
+		NumDim: 768,
+	},
+	"gemini-embedding-001": {
+		Model:  "gemini-embedding-001",
+		NumDim: 3072,
+	},
+	"sentence-bert": {
+		Model:  "sentence-bert",
+		NumDim: 384,
+	},
+}
+
+// create typesence schema by collection name and number of dimensions
+func schema(collName string, numDim int) *tsapi.CollectionSchema {
+	return &tsapi.CollectionSchema{
+		Name: collName,
+		Fields: []tsapi.Field{
+			{Name: "id", Type: "string"},
+			{Name: "content", Type: "string"},
+			{Name: "embedding", Type: "float[]", NumDim: pointer.Int(numDim)},
+		},
+	}
+}
 
 func TestNewTypeSenseClient(t *testing.T) {
 	ctx := context.Background()
-	embedder := embedding.NewSentenceBertEmbedder("http://localhost:6600")
+	embedder := embedding.NewSentenceBertEmbedder(sentenceBertEmbedderUrl)
 	ts := New("http://localhost:8108", "xyz", embedder)
 	assert.NotNil(t, ts)
 
@@ -26,155 +78,489 @@ func TestNewTypeSenseClient(t *testing.T) {
 	})
 }
 
-func TestTypeSenseClientWithSentenceBertEmbedder(t *testing.T) {
+/*
+ * [TestCreateCollectionsForCountriesDescription]
+ * create collections for countries description
+ * this test creates collections for countries description with different embedding models
+ * sentence-bert, models/embedding-001, gemini-embedding-001
+ */
+func TestCreateCollectionsForCountriesDescription(t *testing.T) {
 	ctx := context.Background()
-	embedder := embedding.NewSentenceBertEmbedder("http://localhost:6600")
-	ts := New("http://localhost:8108", "xyz", embedder)
+	ts := New(typesenseUrl, typesenseApiKey, nil)
+	assert.NotNil(t, ts)
 
-	t.Run("test english text", func(t *testing.T) {
-		name := "developer_conferences"
-		numDim := 384
+	t.Run("create sentence-bert embedding collection", func(t *testing.T) {
+		em := embeddingModelMap["sentence-bert"]
+		embedder := embedding.NewSentenceBertEmbedder(sentenceBertEmbedderUrl)
+		ts.SetEmbedder(embedder)
+		ts.DeleteCollection(ctx, collCountriesDescriptionSentenceBert)
+		assert.NoError(t, ts.CreateCollection(ctx, schema(collCountriesDescriptionSentenceBert, em.NumDim)))
+	})
 
-		t.Run("delete collection", func(t *testing.T) {
-			// ignore error
-			ts.client.Collection(name).Delete(ctx)
-		})
+	geminiClient, _ := genai.NewClient(ctx, &genai.ClientConfig{APIKey: LoadAPIKey()})
 
-		t.Run("create collection", func(t *testing.T) {
-			schema := &tsapi.CollectionSchema{
-				Name: name,
-				Fields: []tsapi.Field{
-					{
-						Name: "id",
-						Type: "string",
-					},
-					{
-						Name: "lang",
-						Type: "string",
-					},
-					{
-						Name: "content",
-						Type: "string",
-					},
-					{
-						Name:   "embedding",
-						Type:   "float[]",
-						NumDim: &numDim,
-					},
+	t.Run("create models/embedding-001 embedding collection", func(t *testing.T) {
+		em := embeddingModelMap["models/embedding-001"]
+		embedder := embedding.NewGeminiEmbedder(geminiClient, em.Model)
+		ts.SetEmbedder(embedder)
+		ts.DeleteCollection(ctx, collCountriesDescriptionGeminiModelsEmbedding001)
+		assert.NoError(t, ts.CreateCollection(ctx, schema(collCountriesDescriptionGeminiModelsEmbedding001, em.NumDim)))
+	})
+
+	t.Run("create gemini-embedding-001 embedding collection", func(t *testing.T) {
+		em := embeddingModelMap["gemini-embedding-001"]
+		embedder := embedding.NewGeminiEmbedder(geminiClient, em.Model)
+		ts.SetEmbedder(embedder)
+		ts.DeleteCollection(ctx, collCountriesDescriptionGeminiGeminiEmbedding001)
+		assert.NoError(t, ts.CreateCollection(ctx, schema(collCountriesDescriptionGeminiGeminiEmbedding001, em.NumDim)))
+	})
+}
+
+/*
+ * [TestCreateCollectionsForDeveloperConferences]
+ * create collections for developer conferences
+ * this test creates collections for developer conferences with different embedding models
+ * sentence-bert, models/embedding-001, gemini-embedding-001
+ */
+func TestCreateCollectionsForDeveloperConferences(t *testing.T) {
+	ctx := context.Background()
+	ts := New(typesenseUrl, typesenseApiKey, nil)
+	assert.NotNil(t, ts)
+
+	t.Run("create sentence-bert embedding collection", func(t *testing.T) {
+		em := embeddingModelMap["sentence-bert"]
+		embedder := embedding.NewSentenceBertEmbedder(sentenceBertEmbedderUrl)
+		ts.SetEmbedder(embedder)
+		ts.DeleteCollection(ctx, collDeveloperConferenceSentenceBert)
+		assert.NoError(t, ts.CreateCollection(ctx, schema(collDeveloperConferenceSentenceBert, em.NumDim)))
+	})
+
+	geminiClient, _ := genai.NewClient(ctx, &genai.ClientConfig{APIKey: LoadAPIKey()})
+
+	t.Run("create models/embedding-001 embedding collection", func(t *testing.T) {
+		em := embeddingModelMap["models/embedding-001"]
+		embedder := embedding.NewGeminiEmbedder(geminiClient, em.Model)
+		ts.SetEmbedder(embedder)
+		ts.DeleteCollection(ctx, collDeveloperConferenceGeminiModelsEmbedding001)
+		assert.NoError(t, ts.CreateCollection(ctx, schema(collDeveloperConferenceGeminiModelsEmbedding001, em.NumDim)))
+	})
+
+	t.Run("create gemini-embedding-001 embedding collection", func(t *testing.T) {
+		em := embeddingModelMap["gemini-embedding-001"]
+		embedder := embedding.NewGeminiEmbedder(geminiClient, em.Model)
+		ts.SetEmbedder(embedder)
+		ts.DeleteCollection(ctx, collDeveloperConferenceGeminiGeminiEmbedding001)
+		assert.NoError(t, ts.CreateCollection(ctx, schema(collDeveloperConferenceGeminiGeminiEmbedding001, em.NumDim)))
+	})
+}
+
+// texts for countries description
+// key is country name, value is description
+// this document is inserted into typesense collections
+var countriesDescriptionTexts map[string]string = map[string]string{
+	"tokyo": "tokyo is the capital city of japan and there is a disney land. sushi is a popular food in japan.",
+	"seoul": "seoul is the capital city of south korea and there is a lotte world. gangnam style is a popular k-pop song.",
+	"rome":  "rome is the capital city of italy and there is a colosseum and Vatican City. the Vatican City is the smallest country in the world.",
+}
+
+/*
+ * [TestAddCountriesDescriptionDocuments_SentenceBert]
+ * add documents to countries description collections with sentence-bert embedding model
+ */
+func TestAddCountriesDescriptionDocuments_SentenceBert(t *testing.T) {
+	ctx := context.Background()
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewSentenceBertEmbedder(sentenceBertEmbedderUrl))
+	assert.NotNil(t, ts)
+
+	t.Run("add countries descriptions with sentence-bert", func(t *testing.T) {
+		err := addDocumentToCollection(ctx, ts, embeddingModelMap["sentence-bert"], countriesDescriptionTexts, collCountriesDescriptionSentenceBert, "en")
+		assert.NoError(t, err)
+	})
+}
+
+/*
+ * [TestAddCountriesDescriptionDocuments_ModelEmbedding001]
+ * add documents to countries description collections with models/embedding-001 embedding model
+ */
+func TestAddCountriesDescriptionDocuments_ModelEmbedding001(t *testing.T) {
+	ctx := context.Background()
+	geminiClient, _ := genai.NewClient(ctx, &genai.ClientConfig{APIKey: LoadAPIKey()})
+	em := embeddingModelMap["models/embedding-001"]
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewGeminiEmbedder(geminiClient, em.Model))
+	assert.NotNil(t, ts)
+
+	t.Run("add countries descriptions with models/embedding-001", func(t *testing.T) {
+		err := addDocumentToCollection(ctx, ts, em, countriesDescriptionTexts, collCountriesDescriptionGeminiModelsEmbedding001, "")
+		assert.NoError(t, err)
+	})
+}
+
+/*
+ * [TestAddCountriesDescriptionDocuments_GeminiEmbedding001]
+ * add documents to countries description collections with gemini-embedding-001 embedding model
+ */
+func TestAddCountriesDescriptionDocuments_GeminiEmbedding001(t *testing.T) {
+	ctx := context.Background()
+	geminiClient, _ := genai.NewClient(ctx, &genai.ClientConfig{APIKey: LoadAPIKey()})
+	em := embeddingModelMap["gemini-embedding-001"]
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewGeminiEmbedder(geminiClient, em.Model))
+	assert.NotNil(t, ts)
+
+	t.Run("add countries descriptions with models/embedding-001", func(t *testing.T) {
+		err := addDocumentToCollection(ctx, ts, em, countriesDescriptionTexts, collCountriesDescriptionGeminiGeminiEmbedding001, "")
+		assert.NoError(t, err)
+	})
+}
+
+// texts for developer conferences
+// key is conference name, value is description
+// this document is inserted into typesense collections
+var developerConferencesTexts map[string]string = map[string]string{
+	"gophercon":    GopherConTextEn,
+	"pycon":        PyconTextEn,
+	"nodecongress": NodeCongressTextEn,
+	"devcon":       DevconTextEn,
+}
+
+/*
+ * [TestAddDeveloperConferencesDocuments_SentenceBert]
+ * add documents to developer conferences collections with sentence-bert embedding model
+ */
+func TestAddDeveloperConferencesDocuments_SentenceBert(t *testing.T) {
+	ctx := context.Background()
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewSentenceBertEmbedder(sentenceBertEmbedderUrl))
+	assert.NotNil(t, ts)
+
+	t.Run("add developer conferences with sentence-bert", func(t *testing.T) {
+		err := addDocumentToCollection(ctx, ts, embeddingModelMap["sentence-bert"], developerConferencesTexts, collDeveloperConferenceSentenceBert, "en")
+		assert.NoError(t, err)
+	})
+}
+
+/*
+ * [TestAddDeveloperConferencesDocuments_ModelEmbedding001]
+ * add documents to developer conferences collections with models/embedding-001 embedding model
+ */
+func TestAddDeveloperConferencesDocuments_ModelEmbedding001(t *testing.T) {
+	ctx := context.Background()
+	geminiClient, _ := genai.NewClient(ctx, &genai.ClientConfig{APIKey: LoadAPIKey()})
+	em := embeddingModelMap["models/embedding-001"]
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewGeminiEmbedder(geminiClient, em.Model))
+	assert.NotNil(t, ts)
+
+	t.Run("add developer conferences with models/embedding-001", func(t *testing.T) {
+		err := addDocumentToCollection(ctx, ts, em, developerConferencesTexts, collDeveloperConferenceGeminiModelsEmbedding001, "")
+		assert.NoError(t, err)
+	})
+}
+
+/*
+ * [TestAddDeveloperConferencesDocuments_GeminiEmbedding001]
+ * add documents to developer conferences collections with gemini-embedding-001 embedding model
+ */
+func TestAddDeveloperConferencesDocuments_GeminiEmbedding001(t *testing.T) {
+	ctx := context.Background()
+	geminiClient, _ := genai.NewClient(ctx, &genai.ClientConfig{APIKey: LoadAPIKey()})
+	em := embeddingModelMap["gemini-embedding-001"]
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewGeminiEmbedder(geminiClient, em.Model))
+	assert.NotNil(t, ts)
+
+	t.Run("add developer conferences with gemini-embedding-001", func(t *testing.T) {
+		err := addDocumentToCollection(ctx, ts, em, developerConferencesTexts, collDeveloperConferenceGeminiGeminiEmbedding001, "")
+		assert.NoError(t, err)
+	})
+}
+
+// texts for countries description
+// we use this texts to search documents as query parameters
+var vectorSearchRequestsCountriesDescription []string = []string{
+	"seoul",
+	"tokyo",
+	"rome",
+	"south korea",
+	"japan",
+	"italy",
+	"lotte world",
+	"sushi",
+	"disney land",
+	"colosseum",
+	"smallest country",
+}
+
+// texts for countries description
+// we use this texts as expected results
+var vectorSearchExpectedCountriesDescription []string = []string{
+	"seoul",
+	"tokyo",
+	"rome",
+	"seoul",
+	"tokyo",
+	"rome",
+	"seoul",
+	"tokyo",
+	"tokyo",
+	"rome",
+	"rome",
+}
+
+// create vectorized string from query
+// result will be "embedding:([vector])"
+func vectorString(ctx context.Context, embedder embedding.Embedder, q, lang string) (string, error) {
+	vector, err := embedder.Embed(ctx, model.EmbeddingRequest{
+		Text:     q,
+		Language: lang,
+	})
+	if err != nil {
+		return "", err
+	}
+	if vector == nil {
+		return "", fmt.Errorf("vector is nil")
+	}
+	if vector.Text != q {
+		return "", fmt.Errorf("vector text is not equal to query")
+	}
+	return "embedding:([" + vectorToString(vector.Embedding) + "])", nil
+}
+
+// perform multi search
+// fields(QueryBy, IncludeFields) is static
+func doMultiSearch(ctx context.Context, cli *typesense.Client, collName, q, vectorstr string) (string, error) {
+	res, err := cli.MultiSearch.Perform(
+		ctx,
+		&tsapi.MultiSearchParams{
+			Q:             &q,
+			QueryBy:       pointer.String("content"),
+			IncludeFields: pointer.String("id,content"),
+			VectorQuery:   &vectorstr,
+		},
+		tsapi.MultiSearchSearchesParameter{
+			Searches: []tsapi.MultiSearchCollectionParameters{
+				{
+					Collection: collName,
 				},
-			}
-			err := ts.CreateCollection(ctx, schema)
-			assert.NoError(t, err)
-		})
+			},
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+	if res == nil {
+		return "", fmt.Errorf("multi search result is nil")
+	}
+	if len(res.Results) == 0 {
+		return "", fmt.Errorf("multi search result is empty")
+	}
+	hits := *(res.Results[0].Hits)
+	docs := *(hits[0].Document)
+	return docs["id"].(string), nil
+}
 
-		t.Run("check collection", func(t *testing.T) {
-			col, err := ts.client.Collection(name).Retrieve(ctx)
-			assert.NoError(t, err)
-			assert.NotNil(t, col)
-			assert.Equal(t, name, col.Name)
-		})
+// compare expected and actual results
+func isMatched(expected, actual []string) bool {
+	for i := range expected {
+		if expected[i] != actual[i] {
+			return false
+		}
+	}
+	return true
+}
 
-		// documents to index
-		docsToIndex := []Document{
-			{ID: "gophercon-en", Lang: "en", Content: GopherConTextEn},
-			{ID: "pycon-en", Lang: "en", Content: PyconTextEn},
-			{ID: "nodecongress-en", Lang: "en", Content: NodeCongressTextEn},
-			{ID: "devcon-en", Lang: "en", Content: DevconTextEn},
+/*
+ * [TestVectorSearchCountriesDescription_SentenceBert]
+ * vector search countries description with sentence-bert embedding model
+ */
+func TestVectorSearchCountriesDescription_SentenceBert(t *testing.T) {
+	ctx := context.Background()
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewSentenceBertEmbedder(sentenceBertEmbedderUrl))
+
+	result := make([]string, 0)
+	for _, q := range vectorSearchRequestsCountriesDescription {
+		vectorstr, err := vectorString(ctx, ts.embedder, q, "en")
+		assert.NoError(t, err)
+
+		res, err := doMultiSearch(ctx, ts.client, collCountriesDescriptionSentenceBert, q, vectorstr)
+		assert.NoError(t, err)
+		result = append(result, res)
+	}
+	for i := range vectorSearchExpectedCountriesDescription {
+		assert.Equal(t, result[i], vectorSearchExpectedCountriesDescription[i])
+	}
+	assert.True(t, isMatched(result, vectorSearchExpectedCountriesDescription))
+}
+
+/*
+ * [TestVectorSearchCountriesDescription_ModelEmbedding001]
+ * vector search countries description with models/embedding-001 embedding model
+ */
+func TestVectorSearchCountriesDescription_ModelEmbedding001(t *testing.T) {
+	ctx := context.Background()
+	geminiClient, _ := genai.NewClient(ctx, &genai.ClientConfig{APIKey: LoadAPIKey()})
+	em := embeddingModelMap["models/embedding-001"]
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewGeminiEmbedder(geminiClient, em.Model))
+
+	result := make([]string, 0)
+	for _, q := range vectorSearchRequestsCountriesDescription {
+		vectorstr, err := vectorString(ctx, ts.embedder, q, "")
+		assert.NoError(t, err)
+
+		res, err := doMultiSearch(ctx, ts.client, collCountriesDescriptionGeminiModelsEmbedding001, q, vectorstr)
+		assert.NoError(t, err)
+		result = append(result, res)
+	}
+	for i := range vectorSearchExpectedCountriesDescription {
+		assert.Equal(t, result[i], vectorSearchExpectedCountriesDescription[i])
+	}
+	assert.True(t, isMatched(result, vectorSearchExpectedCountriesDescription))
+}
+
+/*
+ * [TestVectorSearchCountriesDescription_GeminiEmbedding001]
+ * vector search countries description with gemini-embedding-001 embedding model
+ */
+func TestVectorSearchCountriesDescription_GeminiEmbedding001(t *testing.T) {
+	ctx := context.Background()
+	geminiClient, _ := genai.NewClient(ctx, &genai.ClientConfig{APIKey: LoadAPIKey()})
+	em := embeddingModelMap["gemini-embedding-001"]
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewGeminiEmbedder(geminiClient, em.Model))
+
+	result := make([]string, 0)
+	for _, q := range vectorSearchRequestsCountriesDescription {
+		vectorstr, err := vectorString(ctx, ts.embedder, q, "")
+		assert.NoError(t, err)
+
+		res, err := doMultiSearch(ctx, ts.client, collCountriesDescriptionGeminiGeminiEmbedding001, q, vectorstr)
+		assert.NoError(t, err)
+		result = append(result, res)
+	}
+	for i := range vectorSearchExpectedCountriesDescription {
+		assert.Equal(t, result[i], vectorSearchExpectedCountriesDescription[i])
+	}
+	assert.True(t, isMatched(result, vectorSearchExpectedCountriesDescription))
+}
+
+// texts for developer conferences
+// we use this texts to search documents as query parameters
+var vectorSearchRequestsDeveloperConferences []string = []string{
+	"golang",
+	"nodejs",
+	"ethereum",
+	"python",
+}
+
+// texts for developer conferences
+// we use this texts as expected results
+var vectorSearchExpectedDeveloperConferences []string = []string{
+	"gophercon",
+	"nodecongress",
+	"devcon",
+	"pycon",
+}
+
+/*
+ * [TestVectorSearchDeveloperConferences_SentenceBert]
+ * vector search developer conferences with sentence-bert embedding model
+ */
+func TestVectorSearchDeveloperConferences_SentenceBert(t *testing.T) {
+	ctx := context.Background()
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewSentenceBertEmbedder(sentenceBertEmbedderUrl))
+
+	result := make([]string, 0)
+	for _, q := range vectorSearchRequestsDeveloperConferences {
+		vectorstr, err := vectorString(ctx, ts.embedder, q, "en")
+		assert.NoError(t, err)
+
+		res, err := doMultiSearch(ctx, ts.client, collDeveloperConferenceSentenceBert, q, vectorstr)
+		assert.NoError(t, err)
+		result = append(result, res)
+	}
+	for i := range vectorSearchExpectedDeveloperConferences {
+		assert.Equal(t, result[i], vectorSearchExpectedDeveloperConferences[i])
+	}
+	assert.True(t, isMatched(result, vectorSearchExpectedDeveloperConferences))
+}
+
+/*
+ * [TestVectorSearchDeveloperConferences_ModelEmbedding001]
+ * vector search developer conferences with models/embedding-001 embedding model
+ */
+func TestVectorSearchDeveloperConferences_ModelEmbedding001(t *testing.T) {
+	ctx := context.Background()
+	geminiClient, _ := genai.NewClient(ctx, &genai.ClientConfig{APIKey: LoadAPIKey()})
+	em := embeddingModelMap["models/embedding-001"]
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewGeminiEmbedder(geminiClient, em.Model))
+
+	result := make([]string, 0)
+	for _, q := range vectorSearchRequestsDeveloperConferences {
+		vectorstr, err := vectorString(ctx, ts.embedder, q, "")
+		assert.NoError(t, err)
+
+		res, err := doMultiSearch(ctx, ts.client, collDeveloperConferenceGeminiModelsEmbedding001, q, vectorstr)
+		assert.NoError(t, err)
+		result = append(result, res)
+	}
+	for i := range vectorSearchExpectedDeveloperConferences {
+		assert.Equal(t, result[i], vectorSearchExpectedDeveloperConferences[i])
+	}
+	assert.True(t, isMatched(result, vectorSearchExpectedDeveloperConferences))
+}
+
+/*
+ * [TestVectorSearchDeveloperConferences_GeminiEmbedding001]
+ * vector search countries description with gemini-embedding-001 embedding model
+ */
+func TestVectorSearchDeveloperConferences_GeminiEmbedding001(t *testing.T) {
+	ctx := context.Background()
+	geminiClient, _ := genai.NewClient(ctx, &genai.ClientConfig{APIKey: LoadAPIKey()})
+	em := embeddingModelMap["gemini-embedding-001"]
+	ts := New(typesenseUrl, typesenseApiKey, embedding.NewGeminiEmbedder(geminiClient, em.Model))
+
+	result := make([]string, 0)
+	for _, q := range vectorSearchRequestsDeveloperConferences {
+		vectorstr, err := vectorString(ctx, ts.embedder, q, "")
+		assert.NoError(t, err)
+
+		res, err := doMultiSearch(ctx, ts.client, collDeveloperConferenceGeminiGeminiEmbedding001, q, vectorstr)
+		assert.NoError(t, err)
+		result = append(result, res)
+	}
+	for i := range vectorSearchExpectedDeveloperConferences {
+		assert.Equal(t, result[i], vectorSearchExpectedDeveloperConferences[i])
+	}
+	assert.True(t, isMatched(result, vectorSearchExpectedDeveloperConferences))
+}
+
+// add documents to collection
+func addDocumentToCollection(ctx context.Context, ts *Client, m embeddingModel, info map[string]string, collectionName, lang string) error {
+	for k, v := range info {
+		vector, err := ts.embedder.Embed(ctx, model.EmbeddingRequest{
+			Text:     v,
+			Language: lang,
+		})
+		if err != nil {
+			return err
+		}
+		if vector == nil {
+			return fmt.Errorf("vector is nil")
+		}
+		if len(vector.Embedding) != m.NumDim {
+			return fmt.Errorf("vector dimension is not %d", m.NumDim)
+		}
+		if vector.Text != v {
+			return fmt.Errorf("vector text is not %s", v)
 		}
 
-		t.Run("add documents", func(t *testing.T) {
-			for _, doc := range docsToIndex {
-				t.Run("add document: "+doc.ID, func(t *testing.T) {
-					resp, err := ts.embedder.Embed(ctx, model.EmbeddingRequest{
-						Text:     doc.Content,
-						Language: doc.Lang,
-					})
-					assert.NoError(t, err)
-					assert.NotNil(t, resp)
-					assert.Equal(t, len(resp.Embedding), numDim)
-					assert.Equal(t, doc.Content, resp.Text)
+		typesenseDoc := map[string]interface{}{
+			"id":        k,
+			"content":   v,
+			"embedding": vector.Embedding,
+		}
 
-					typesenseDoc := map[string]interface{}{
-						"id":        doc.ID,
-						"lang":      doc.Lang,
-						"content":   doc.Content,
-						"embedding": resp.Embedding,
-					}
-
-					_, err = ts.client.Collection(name).Documents().Create(ctx, typesenseDoc)
-					assert.NoError(t, err)
-				})
-			}
-		})
-
-		t.Run("search documents", func(t *testing.T) {
-			quries := []string{
-				// "a conference for the Go community",
-				// "what conference's mascot is gopher?",
-				// "where is the best place to get the newest tech news for javascript?",
-				// "where is the highest proportion to meet vitalik buterin?",
-				// "please recommend the best conference for python developer",
-				"golang", "gopher", "javascript", "ethereum", "python",
-			}
-
-			results := make([]string, 0)
-
-			for _, q := range quries {
-				t.Run("search document: "+q, func(t *testing.T) {
-					vector, err := ts.embedder.Embed(ctx, model.EmbeddingRequest{
-						Text:     q,
-						Language: "en",
-					})
-					assert.NoError(t, err)
-					assert.NotNil(t, vector)
-					assert.Equal(t, len(vector.Embedding), numDim)
-					assert.Equal(t, q, vector.Text)
-
-					vectorString := "embedding:([" + vectorToString(vector.Embedding) + "])"
-					includeFields := []string{"id"}
-					includeFieldsStr := strings.Join(includeFields, ",")
-
-					queryBy := "content"
-
-					// when using search, an error occurs
-					// status: 400 response: {"message":"Query string exceeds max allowed length of 4000.
-					// Use the /multi_search end-point for larger payloads."
-					t.Run("use multi-search", func(t *testing.T) {
-						res, err := ts.client.MultiSearch.Perform(
-							ctx,
-							&tsapi.MultiSearchParams{
-								Q:             &q,
-								QueryBy:       &queryBy,
-								IncludeFields: &includeFieldsStr,
-								VectorQuery:   &vectorString,
-							},
-							tsapi.MultiSearchSearchesParameter{
-								Searches: []tsapi.MultiSearchCollectionParameters{
-									{
-										Collection: name,
-									},
-								},
-							},
-						)
-						assert.NoError(t, err)
-						assert.NotNil(t, res)
-
-						assert.GreaterOrEqual(t, len(res.Results), 1)
-
-						hits := *(res.Results[0].Hits)
-						docs := *(hits[0].Document)
-						results = append(results, docs["id"].(string))
-					})
-				})
-			}
-
-			assert.Equal(t, len(results), len(quries))
-			for i, result := range results {
-				// assert.Equal(t, result, docsToIndex[i].ID)
-				t.Log(i, ":", result)
-			}
-		})
-	})
+		_, err = ts.client.Collection(collectionName).Documents().Create(ctx, typesenseDoc)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func vectorToString(v []float32) string {
@@ -188,37 +574,12 @@ func vectorToString(v []float32) string {
 	return sb.String()
 }
 
-// t.Run("Add Document", func(t *testing.T) {
-// 	docsToIndex := []Document{
-// 		{ID: "gophercon-eng", Lang: "en", Content: LongTextGopherConEng},
-// 		// {ID: "gophercon-kor", Lang: "ko", Content: LongTextGopherConKor},
-// 	}
-// 	for _, doc := range docsToIndex {
-// 		resp, err := ts.embedder.Embed(
-// 			ctx,
-// 			model.EmbeddingRequest{
-// 				Text:     doc.Content,
-// 				Language: doc.Lang,
-// 			},
-// 		)
-// 		assert.NoError(t, err)
-// 		assert.NotNil(t, resp)
-
-// 		typesenseDoc := map[string]interface{}{
-// 			"id":        doc.ID,
-// 			"lang":      doc.Lang,
-// 			"content":   doc.Content,
-// 			"embedding": resp.Embedding,
-// 		}
-
-// 		_, err = ts.client.Collection(collectionName).Documents().Create(
-// 			ctx,
-// 			typesenseDoc,
-// 		)
-// 		assert.NoError(t, err)
-// 	}
-// })
-// }
+func LoadAPIKey() string {
+	if err := godotenv.Load("../../.env"); err != nil {
+		return ""
+	}
+	return os.Getenv("GEMINI_API_KEY")
+}
 
 const GopherConTextEn string = `GopherCon is the premier annual global conference for the Go (Golang) programming language, named after its mascot, the gopher. It provides a platform for Go developers to learn, network, and share knowledge about the language's features, tools, and best practices. Organized by a community-driven group, GopherCon fosters an inclusive and supportive Go community by offering state-of-the-art talks and creating opportunities for growth for developers of all experience levels. 
 Key Aspects of GopherCon

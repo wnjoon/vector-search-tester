@@ -13,10 +13,10 @@ type geminiEmbedder struct {
 	client *genai.Client
 }
 
-func NewGeminiEmbedder(client *genai.Client, model ...string) Embedder {
+func NewGeminiEmbedder(client *genai.Client, model string) Embedder {
 	return &geminiEmbedder{
 		client: client,
-		model:  "gemini-embedding-001",
+		model:  model,
 	}
 }
 
@@ -29,6 +29,9 @@ func (g *geminiEmbedder) Embed(ctx context.Context, req model.EmbeddingRequest) 
 		g.model,
 		contents,
 		nil,
+		// &genai.EmbedContentConfig{
+		// 	TaskType: req.TaskType,
+		// },
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to embed: %w", err)

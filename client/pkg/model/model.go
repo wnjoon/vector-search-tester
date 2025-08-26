@@ -4,6 +4,7 @@ package model
 type EmbeddingRequest struct {
 	Text     string `json:"text"`
 	Language string `json:"language"`
+	TaskType string `json:"task_type"`
 }
 
 // EmbeddingResponse is a struct for embedding response

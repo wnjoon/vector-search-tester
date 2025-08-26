@@ -21,7 +21,7 @@ func TestGeminiEmbedder(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
-	geminiEmbedder := NewGeminiEmbedder(client)
+	geminiEmbedder := NewGeminiEmbedder(client, "models/embedding-001")
 
 	t.Run("Embed - ShortText", func(t *testing.T) {
 		t.Run("today's weather is wonderful", func(t *testing.T) {
